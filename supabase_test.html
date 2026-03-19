@@ -4,79 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Supabase Connection Test</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
-  button { padding: 12px 24px; font-size: 15px; background: #c8622a; color: #fff; border: none; border-radius: 8px; cursor: pointer; margin: 8px 4px; }
-  .result { margin-top: 12px; padding: 14px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
-  .ok  { background: #edf7f2; color: #1a5c36; border: 1px solid #b2dfcc; }
-  .err { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
-  .inf { background: #f0f4ff; color: #1e3a8a; border: 1px solid #bfdbfe; }
+  body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;background:#f5f5f5}
+  h2{margin-bottom:6px}p{color:#666;font-size:13px;margin-bottom:16px}
+  button{padding:12px 20px;font-size:14px;background:#c8622a;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:5px 4px;display:block;width:100%}
+  .result{margin-top:10px;padding:14px;border-radius:8px;font-size:12px;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+  .ok{background:#edf7f2;color:#1a5c36;border:1px solid #b2dfcc}
+  .err{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5}
+  .inf{background:#f0f4ff;color:#1e3a8a;border:1px solid #bfdbfe}
 </style>
 </head>
 <body>
-<h2>Supabase Test</h2>
-<p style="color:#666;font-size:13px">Open this page, run each test, and send me a screenshot of the results.</p>
-
-<button onclick="testLib()">1. Test Library Loaded</button>
-<button onclick="testRead()">2. Test Read</button>
-<button onclick="testWrite()">3. Test Write</button>
-<button onclick="testRead()">4. Read Again (confirm write worked)</button>
-
+<h2>Supabase Connection Test</h2>
+<p>Click each button in order and screenshot the results.</p>
+<button onclick="testRead()">1. Test READ from Supabase</button>
+<button onclick="testWrite()">2. Test WRITE to Supabase</button>
+<button onclick="testRead()">3. Test READ again (should show test row)</button>
 <div id="out"></div>
-
 <script>
-const SB_URL = 'https://xamkozvouxqnessnvpgp.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
-
-function log(msg, type) {
-  var d = document.createElement('div');
-  d.className = 'result ' + (type||'inf');
-  d.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
-  document.getElementById('out').prepend(d);
+var SB_URL='https://xamkozvouxqnessnvpgp.supabase.co';
+var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
+function getHeaders(extra){var h={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'};if(extra)Object.assign(h,extra);return h;}
+function log(msg,type){var d=document.createElement('div');d.className='result '+(type||'inf');d.textContent=new Date().toLocaleTimeString()+' — '+msg;document.getElementById('out').prepend(d);}
+async function testRead(){
+  log('Reading from jobs table…','inf');
+  try{
+    var res=await fetch(SB_URL+'/rest/v1/jobs?select=id,updated_at&order=updated_at.desc',{method:'GET',headers:getHeaders()});
+    var body=await res.text();
+    if(res.ok){var rows=JSON.parse(body);log('✓ READ OK — '+res.status+' — '+rows.length+' rows: '+JSON.stringify(rows),'ok');}
+    else{log('✗ READ FAILED — HTTP '+res.status+' — '+body,'err');}
+  }catch(e){log('✗ READ EXCEPTION: '+e.message,'err');}
 }
-
-function testLib() {
-  if (typeof supabase !== 'undefined') {
-    log('✓ Supabase library loaded OK', 'ok');
-    var client = supabase.createClient(SB_URL, SB_KEY);
-    log('✓ Client created: ' + JSON.stringify(Object.keys(client)), 'ok');
-  } else {
-    log('✗ Supabase library NOT loaded — CDN may be blocked', 'err');
-  }
-}
-
-async function testRead() {
-  log('Reading from jobs table…', 'inf');
-  try {
-    var client = supabase.createClient(SB_URL, SB_KEY);
-    var result = await client.from('jobs').select('id, updated_at').order('updated_at', {ascending: false});
-    if (result.error) {
-      log('✗ Read error: ' + JSON.stringify(result.error), 'err');
-    } else {
-      log('✓ Read OK — ' + result.data.length + ' rows found: ' + JSON.stringify(result.data), 'ok');
-    }
-  } catch(e) {
-    log('✗ Read exception: ' + e.message, 'err');
-  }
-}
-
-async function testWrite() {
-  log('Writing test row to jobs table…', 'inf');
-  try {
-    var client = supabase.createClient(SB_URL, SB_KEY);
-    var result = await client.from('jobs').upsert(
-      { id: 'connection-test', data: { id: 'connection-test', name: 'Connection Test', timestamp: new Date().toISOString() }, updated_at: new Date().toISOString() },
-      { onConflict: 'id' }
-    );
-    if (result.error) {
-      log('✗ Write error: ' + JSON.stringify(result.error), 'err');
-    } else {
-      log('✓ Write OK — row saved successfully', 'ok');
-    }
-  } catch(e) {
-    log('✗ Write exception: ' + e.message, 'err');
-  }
+async function testWrite(){
+  log('Writing test row…','inf');
+  try{
+    var payload={id:'test-'+Date.now(),data:{id:'test',name:'Test Job',ts:new Date().toISOString()},updated_at:new Date().toISOString()};
+    var res=await fetch(SB_URL+'/rest/v1/jobs',{method:'POST',headers:getHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(payload)});
+    var body=await res.text();
+    if(res.status===200||res.status===201||res.status===204){log('✓ WRITE OK — HTTP '+res.status+' — row saved','ok');}
+    else{log('✗ WRITE FAILED — HTTP '+res.status+' — '+body,'err');}
+  }catch(e){log('✗ WRITE EXCEPTION: '+e.message,'err');}
 }
 </script>
 </body>

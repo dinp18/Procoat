@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Pro Coat Painting — Job Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -1507,70 +1506,67 @@ function exportQuotePdf(){
 // ── Supabase Sync ──
 const SB_URL = 'https://xamkozvouxqnessnvpgp.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
-// Use the Supabase JS client loaded from CDN for reliable auth handling
-let sb = null;
-function getSB(){
-  if(sb) return sb;
-  if(typeof supabase !== 'undefined'){
-    sb = supabase.createClient(SB_URL, SB_KEY);
-    return sb;
-  }
-  return null;
+
+function sbHeaders(extra){
+  var h = {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json'
+  };
+  if(extra) Object.assign(h, extra);
+  return h;
 }
 
-// Show a small sync status indicator
 function setSyncStatus(state){
   var el = document.getElementById('syncStatus');
   if(!el) return;
-  var map = {saving:'⏳ Saving…', saved:'✓ Saved', error:'⚠ Offline — changes saved locally', loading:'⏳ Loading…'};
+  var map = {saving:'⏳ Saving…', saved:'✓ Saved', error:'⚠ Offline', loading:'⏳ Loading…'};
   el.textContent = map[state]||'';
-  el.style.color = state==='error' ? '#c8622a' : state==='saved' ? '#2d7a4f' : '#9c9690';
-  if(state==='saved') setTimeout(function(){ el.textContent=''; }, 2000);
+  el.style.color = state==='error'?'#c8622a':state==='saved'?'#2d7a4f':'#9c9690';
+  if(state==='saved') setTimeout(function(){ el.textContent=''; }, 2500);
 }
 
-// Save a single job to Supabase (upsert by id)
 async function saveJob(job){
   setSyncStatus('saving');
   try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
-  var client = getSB();
-  if(!client){ setSyncStatus('error'); return; }
   try{
-    var result = await client.from('jobs').upsert(
-      {id: String(job.id), data: job, updated_at: new Date().toISOString()},
-      {onConflict: 'id'}
-    );
-    if(result.error){ throw result.error; }
-    setSyncStatus('saved');
+    var res = await fetch(SB_URL + '/rest/v1/jobs', {
+      method: 'POST',
+      headers: sbHeaders({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({id: String(job.id), data: job, updated_at: new Date().toISOString()})
+    });
+    if(res.status === 200 || res.status === 201 || res.status === 204){
+      setSyncStatus('saved');
+    } else {
+      var txt = await res.text();
+      throw new Error('HTTP ' + res.status + ': ' + txt);
+    }
   } catch(e){
-    console.warn('Supabase save failed:', e);
+    console.warn('Save failed:', e.message);
     setSyncStatus('error');
   }
 }
 
-// Load all jobs from Supabase
 async function loadJobsFromCloud(){
   setSyncStatus('loading');
-  var client = getSB();
-  if(!client){
-    setSyncStatus('error');
-    return loadFromLocalStorage();
-  }
   try{
-    var result = await client.from('jobs').select('data').order('updated_at', {ascending:false});
-    if(result.error){ throw result.error; }
-    if(result.data && result.data.length > 0){
+    var res = await fetch(SB_URL + '/rest/v1/jobs?select=data&order=updated_at.desc', {
+      method: 'GET',
+      headers: sbHeaders()
+    });
+    if(!res.ok){ throw new Error('HTTP ' + res.status); }
+    var rows = await res.json();
+    if(Array.isArray(rows) && rows.length > 0){
       jobs.length = 0;
-      result.data.forEach(function(row){ jobs.push(row.data); });
+      rows.forEach(function(row){ jobs.push(row.data); });
       setSyncStatus('saved');
       return true;
     }
-    // No cloud data yet — load from localStorage as seed
-    return loadFromLocalStorage();
   } catch(e){
-    console.warn('Cloud load failed, falling back to localStorage:', e);
+    console.warn('Cloud load failed:', e.message);
     setSyncStatus('error');
-    return loadFromLocalStorage();
   }
+  return loadFromLocalStorage();
 }
 
 function loadFromLocalStorage(){
@@ -1588,57 +1584,14 @@ function loadFromLocalStorage(){
   return false;
 }
 
-// Delete a job from Supabase
 async function deleteJobFromCloud(jobId){
-  var client = getSB();
-  if(!client) return;
   try{
-    await client.from('jobs').delete().eq('id', String(jobId));
-  } catch(e){ console.warn('Delete failed:', e); }
+    await fetch(SB_URL + '/rest/v1/jobs?id=eq.' + encodeURIComponent(String(jobId)), {
+      method: 'DELETE',
+      headers: sbHeaders()
+    });
+  } catch(e){ console.warn('Delete failed:', e.message); }
 }
-
-// Patch all data-mutating functions to auto-save to cloud
-const _createJob = createJob;
-createJob = function(){
-  _createJob.apply(this, arguments);
-  if(jobs.length > 0) saveJob(jobs[0]);
-};
-
-const _addNote = addNote;
-addNote = function(){
-  _addNote.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
-
-const _addQuoteItem = addQuoteItem;
-addQuoteItem = function(){
-  _addQuoteItem.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
-
-const _deleteQuoteItem = deleteQuoteItem;
-deleteQuoteItem = function(idx){
-  _deleteQuoteItem.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
-
-const _updateQuoteItem = updateQuoteItem;
-updateQuoteItem = function(idx, field, val){
-  _updateQuoteItem.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
-
-const _handlePhotoUpload = handlePhotoUpload;
-handlePhotoUpload = function(e){
-  _handlePhotoUpload.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
-
-const _handleFileUpload = handleFileUpload;
-handleFileUpload = function(e){
-  _handleFileUpload.apply(this, arguments);
-  if(activeJob) saveJob(activeJob);
-};
 
 // ── Init — load from cloud then render ──
 loadJobsFromCloud().then(function(loaded){
