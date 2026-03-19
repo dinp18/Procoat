@@ -644,7 +644,10 @@ input[type=file] { display: none; }
         <div class="main-title" id="mainTitle">Select a job</div>
         <div class="main-sub" id="mainSub"></div>
       </div>
-      <div id="mainStatus" style="flex-shrink:0;margin-left:10px"></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <span id="syncStatus" style="font-size:11px;font-family:'DM Mono',monospace;transition:color 0.3s"></span>
+        <div id="mainStatus"></div>
+      </div>
     </div>
     <div class="tabs" id="tabs" style="display:none">
       <div class="tab active" onclick="switchTab('overview',this)">Overview</div>
@@ -1500,77 +1503,132 @@ function exportQuotePdf(){
   msgsEl.scrollTop=99999;
 }
 
-// ── Local Storage Persistence ──
-const STORAGE_KEY = 'procoat_jobs_v1';
+// ── Supabase Sync ──
+const SB_URL  = 'https://xamkozvouxqnessnvpgp.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
+const SB_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'};
 
-function saveJobs(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs)); }
-  catch(e){ console.warn('Save failed:', e); }
+// Show a small sync status indicator
+function setSyncStatus(state){
+  var el = document.getElementById('syncStatus');
+  if(!el) return;
+  var map = {saving:'⏳ Saving…', saved:'✓ Saved', error:'⚠ Offline — changes saved locally', loading:'⏳ Loading…'};
+  el.textContent = map[state]||'';
+  el.style.color = state==='error' ? '#c8622a' : state==='saved' ? '#2d7a4f' : '#9c9690';
+  if(state==='saved') setTimeout(function(){ el.textContent=''; }, 2000);
 }
 
-function loadJobs(){
+// Save a single job to Supabase (upsert by id)
+async function saveJob(job){
+  setSyncStatus('saving');
+  // Also always keep a localStorage backup
+  try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      const saved = JSON.parse(raw);
-      if(Array.isArray(saved) && saved.length > 0){
-        jobs.length = 0;
-        saved.forEach(function(j){ jobs.push(j); });
-        return true;
-      }
+    var res = await fetch(SB_URL+'/rest/v1/jobs', {
+      method:'POST',
+      headers:SB_HDRS,
+      body:JSON.stringify({id:String(job.id), data:job, updated_at:new Date().toISOString()})
+    });
+    if(res.ok){ setSyncStatus('saved'); }
+    else { throw new Error('HTTP '+res.status); }
+  } catch(e){
+    console.warn('Supabase save failed:', e);
+    setSyncStatus('error');
+  }
+}
+
+// Load all jobs from Supabase
+async function loadJobsFromCloud(){
+  setSyncStatus('loading');
+  try{
+    var res = await fetch(SB_URL+'/rest/v1/jobs?select=data&order=updated_at.desc', {
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    var rows = await res.json();
+    if(rows && rows.length > 0){
+      jobs.length = 0;
+      rows.forEach(function(row){ jobs.push(row.data); });
+      setSyncStatus('saved');
+      return true;
     }
-  } catch(e){ console.warn('Load failed:', e); }
+  } catch(e){
+    console.warn('Cloud load failed, falling back to localStorage:', e);
+    setSyncStatus('error');
+    // Fallback to localStorage
+    try{
+      var raw = localStorage.getItem('procoat_jobs_v1');
+      if(raw){
+        var saved = JSON.parse(raw);
+        if(Array.isArray(saved) && saved.length > 0){
+          jobs.length = 0;
+          saved.forEach(function(j){ jobs.push(j); });
+          return true;
+        }
+      }
+    } catch(e2){}
+  }
   return false;
 }
 
-// Patch all data-mutating functions to auto-save
+// Delete a job from Supabase
+async function deleteJobFromCloud(jobId){
+  try{
+    await fetch(SB_URL+'/rest/v1/jobs?id=eq.'+encodeURIComponent(String(jobId)), {
+      method:'DELETE',
+      headers:SB_HDRS
+    });
+  } catch(e){ console.warn('Delete failed:', e); }
+}
+
+// Patch all data-mutating functions to auto-save to cloud
 const _createJob = createJob;
 createJob = function(){
   _createJob.apply(this, arguments);
-  saveJobs();
+  if(jobs.length > 0) saveJob(jobs[0]);
 };
 
 const _addNote = addNote;
 addNote = function(){
   _addNote.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
 const _addQuoteItem = addQuoteItem;
 addQuoteItem = function(){
   _addQuoteItem.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
 const _deleteQuoteItem = deleteQuoteItem;
 deleteQuoteItem = function(idx){
   _deleteQuoteItem.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
 const _updateQuoteItem = updateQuoteItem;
 updateQuoteItem = function(idx, field, val){
   _updateQuoteItem.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
 const _handlePhotoUpload = handlePhotoUpload;
 handlePhotoUpload = function(e){
   _handlePhotoUpload.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
 const _handleFileUpload = handleFileUpload;
 handleFileUpload = function(e){
   _handleFileUpload.apply(this, arguments);
-  saveJobs();
+  if(activeJob) saveJob(activeJob);
 };
 
-// ── Init ──
-const hasSaved = loadJobs();
-renderJobs();
-// Select first job — either restored or default
-if(jobs.length > 0) selectJob(jobs[0].id);
+// ── Init — load from cloud then render ──
+loadJobsFromCloud().then(function(loaded){
+  renderJobs();
+  if(jobs.length > 0) selectJob(jobs[0].id);
+});
 </script>
 </body>
 </html>
