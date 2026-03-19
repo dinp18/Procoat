@@ -542,70 +542,6 @@ input[type=file] { display: none; }
   background: var(--text); color: #fff;
   border: none; border-radius: var(--radius-sm); cursor: pointer; flex-shrink: 0;
 }
-
-/* ── Editable quote rows ── */
-.q-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px;
-  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-3);
-  border-bottom: 1px solid var(--border-subtle);
-}
-.q-list { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.q-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 8px 6px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface);
-  transition: background 0.1s;
-}
-.q-row:last-child { border-bottom: none; }
-.q-row:hover { background: var(--bg); }
-.q-row-main { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-.q-desc-input {
-  flex: 1; min-width: 0;
-  padding: 6px 8px; font-size: 12.5px;
-  border: 1px solid transparent; border-radius: var(--radius-sm);
-  background: transparent; color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  outline: none; transition: border-color 0.15s, background 0.15s;
-}
-.q-desc-input:hover { border-color: var(--border); background: var(--surface); }
-.q-desc-input:focus { border-color: var(--accent); background: var(--surface); }
-.q-amount-wrap {
-  display: flex; align-items: center;
-  border: 1px solid transparent; border-radius: var(--radius-sm);
-  background: transparent; transition: border-color 0.15s, background 0.15s;
-  flex-shrink: 0;
-}
-.q-amount-wrap:focus-within { border-color: var(--accent); background: var(--surface); }
-.q-amount-wrap:hover { border-color: var(--border); background: var(--surface); }
-.q-dollar {
-  padding: 6px 2px 6px 8px; font-size: 12.5px;
-  color: var(--text-2); font-family: 'DM Mono', monospace; pointer-events: none;
-}
-.q-amt-input {
-  width: 80px; padding: 6px 8px 6px 2px; font-size: 12.5px;
-  border: none; background: transparent; color: var(--text);
-  font-family: 'DM Mono', monospace; outline: none; text-align: right;
-}
-.q-amt-input::-webkit-inner-spin-button,
-.q-amt-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-.q-del-btn {
-  width: 24px; height: 24px; border-radius: 5px; border: none;
-  background: transparent; color: var(--text-3); font-size: 11px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: background 0.1s, color 0.1s;
-}
-.q-del-btn:hover { background: #fee2e2; color: #dc2626; }
-.q-add-btn {
-  margin-top: 8px; width: 100%; padding: 9px;
-  font-size: 12.5px; font-weight: 500; font-family: 'DM Sans', sans-serif;
-  border: 1.5px dashed var(--border); border-radius: var(--radius);
-  background: transparent; color: var(--text-2); cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-}
-.q-add-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 </style>
 </head>
 <body>
@@ -644,16 +580,13 @@ input[type=file] { display: none; }
         <div class="main-title" id="mainTitle">Select a job</div>
         <div class="main-sub" id="mainSub"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-        <span id="syncStatus" style="font-size:11px;font-family:'DM Mono',monospace;transition:color 0.3s"></span>
-        <div id="mainStatus"></div>
-      </div>
+      <div id="mainStatus" style="flex-shrink:0;margin-left:10px"></div>
     </div>
     <div class="tabs" id="tabs" style="display:none">
       <div class="tab active" onclick="switchTab('overview',this)">Overview</div>
       <div class="tab" onclick="switchTab('photos',this)">Photos</div>
       <div class="tab" onclick="switchTab('quote',this)">Quote</div>
-      <div class="tab" onclick="switchTab('files',this)">Receipts</div>
+      <div class="tab" onclick="switchTab('files',this)">Files</div>
       <div class="tab" onclick="switchTab('notes',this)">Notes</div>
     </div>
     <div class="tab-content" id="tabContent">
@@ -924,92 +857,27 @@ function renderPhotos(){
 
 function renderQuote(){
   const j=activeJob;
-  const fmt=n=>n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
   const sub=j.quote.items.reduce((a,i)=>a+i.a,0);
   const gst=Math.round(sub*0.1*100)/100;
   const total=Math.round((sub+gst)*100)/100;
-
-  const itemRows=j.quote.items.map((item,idx)=>`
-    <div class="q-row" data-idx="${idx}">
-      <div class="q-row-main">
-        <input class="q-desc-input" value="${item.d.replace(/"/g,'&quot;')}" onchange="updateQuoteItem(${idx},'d',this.value)" placeholder="Description" />
-        <div class="q-amount-wrap">
-          <span class="q-dollar">$</span>
-          <input class="q-amt-input" value="${item.a}" onchange="updateQuoteItem(${idx},'a',this.value)" type="number" min="0" step="0.01" />
-        </div>
-      </div>
-      <button class="q-del-btn" onclick="deleteQuoteItem(${idx})" title="Remove">✕</button>
-    </div>`).join('');
-
+  const fmt=n=>n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('tabContent').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
       <div style="font-size:15px;font-weight:600;color:var(--text);letter-spacing:-0.02em">Quote — ${j.name}</div>
       <div class="chip" onclick="quickAsk('Review this quote and suggest anything I might have missed')">AI review ↗</div>
     </div>
-
-    <div class="q-list" id="qList">
-      <div class="q-header">
-        <span style="flex:1">Description</span>
-        <span style="width:110px;text-align:right">Amount</span>
-        <span style="width:28px"></span>
-      </div>
-      ${itemRows}
+    ${j.quote.items.length===0?'<div style="font-size:13px;color:var(--text-3)">No quote items yet. Ask the AI to help build one.</div>':`
+    <div class="quote-block">
+      ${j.quote.items.map(i=>`<div class="quote-row"><span>${i.d}</span><span style="font-family:'DM Mono',monospace;font-size:12.5px;flex-shrink:0;margin-left:8px">$${fmt(i.a)}</span></div>`).join('')}
+      <div class="quote-row subtotal"><span>Subtotal</span><span style="font-family:'DM Mono',monospace;font-size:12.5px">$${fmt(sub)}</span></div>
+      <div class="quote-row gst"><span>GST (10%)</span><span style="font-family:'DM Mono',monospace;font-size:12.5px">$${fmt(gst)}</span></div>
+      <div class="quote-total"><span>Total inc. GST</span><span class="quote-total-amount">$${fmt(total)}</span></div>
     </div>
-
-    <button class="q-add-btn" onclick="addQuoteItem()">+ Add line item</button>
-
-    <div class="quote-block" style="margin-top:14px">
-      <div class="quote-row subtotal"><span>Subtotal</span><span style="font-family:'DM Mono',monospace;font-size:12.5px" id="qSub">$${fmt(sub)}</span></div>
-      <div class="quote-row gst"><span>GST (10%)</span><span style="font-family:'DM Mono',monospace;font-size:12.5px" id="qGst">$${fmt(gst)}</span></div>
-      <div class="quote-total"><span>Total inc. GST</span><span class="quote-total-amount" id="qTotal">$${fmt(total)}</span></div>
-    </div>
-
     <div class="chip-row">
-      <div class="chip" onclick="exportQuotePdf()">Export quote PDF ⬇</div>
-      <div class="chip" onclick="exportInvoiceDocx('quote')">Draft quote Word ⬇</div>
+      <div class="chip" onclick="exportInvoiceDocx('quote')">Export quote ⬇</div>
       <div class="chip" onclick="exportInvoiceDocx('invoice')">Export invoice ⬇</div>
       <div class="chip" onclick="quickAsk('Write an email sending this quote to ${j.client}')">Email to client ↗</div>
-    </div>`;
-}
-
-function updateQuoteItem(idx, field, val){
-  if(!activeJob) return;
-  if(field==='a'){
-    const n=parseFloat(val);
-    activeJob.quote.items[idx].a = isNaN(n)?0:Math.round(n*100)/100;
-  } else {
-    activeJob.quote.items[idx].d = val;
-  }
-  refreshQuoteTotals();
-}
-
-function refreshQuoteTotals(){
-  const j=activeJob; if(!j) return;
-  const fmt=n=>n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const sub=j.quote.items.reduce((a,i)=>a+i.a,0);
-  const gst=Math.round(sub*0.1*100)/100;
-  const total=Math.round((sub+gst)*100)/100;
-  const s=document.getElementById('qSub');
-  const g=document.getElementById('qGst');
-  const t=document.getElementById('qTotal');
-  if(s) s.textContent='$'+fmt(sub);
-  if(g) g.textContent='$'+fmt(gst);
-  if(t) t.textContent='$'+fmt(total);
-}
-
-function deleteQuoteItem(idx){
-  if(!activeJob) return;
-  activeJob.quote.items.splice(idx,1);
-  renderQuote();
-}
-
-function addQuoteItem(){
-  if(!activeJob) return;
-  activeJob.quote.items.push({d:'',a:0});
-  renderQuote();
-  // Focus the new description input
-  const rows=document.querySelectorAll('.q-desc-input');
-  if(rows.length) rows[rows.length-1].focus();
+    </div>`}`;
 }
 
 function renderFiles(){
@@ -1020,7 +888,7 @@ function renderFiles(){
       <div class="upload-label">Upload receipt, invoice or document</div>
       <div class="upload-sub">Saved to this job automatically</div>
     </label>
-    <div class="section-label" style="margin-top:0">Receipts & files (${j.files.length})</div>
+    <div class="section-label" style="margin-top:0">Saved files (${j.files.length})</div>
     ${j.files.length===0?'<div style="font-size:12px;color:var(--text-3)">No files yet</div>':`
     <div class="file-grid">
       ${j.files.map(f=>`<div class="file-card"><div class="file-icon">${icons[f.type]||"📄"}</div><div class="file-name">${f.name}</div><div class="file-date">${f.date}</div></div>`).join('')}
@@ -1393,18 +1261,18 @@ async function exportInvoiceDocx(mode){
   zip.file('word/_rels/document.xml.rels', relsWord);
   zip.file('word/media/logo.png', logoArr);
 
-  var b64out = await zip.generateAsync({
-    type:'base64',
+  var blob = await zip.generateAsync({
+    type:'blob',
     mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     compression:'DEFLATE'
   });
 
-  var filename = docType+'_PD'+dd+mm+yyyy+'_'+j.client.replace(/[^a-z0-9]/gi,'_')+'.docx';
-  var dataUri = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,'+b64out;
+  var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = dataUri;
-  a.download = filename;
+  a.href = url;
+  a.download = docType+'_PD'+dd+mm+yyyy+'_'+j.client.replace(/[^a-z0-9]/gi,'_')+'.docx';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 
   var mob = isMobile();
   var msgsEl = document.getElementById(mob?'mobAiMessages':'aiMessages');
@@ -1413,241 +1281,8 @@ async function exportInvoiceDocx(mode){
 }
 
 
-// ── PDF Quote Export ──
-function exportQuotePdf(){
-  if(!activeJob){alert('Please select a job first.');return;}
-  var j=activeJob;
-  var fmt=function(n){return n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});};
-  var sub=j.quote.items.reduce(function(a,i){return a+i.a;},0);
-  var gst=Math.round(sub*0.1*100)/100;
-  var tot=Math.round((sub+gst)*100)/100;
-  var now=new Date();
-  var dd=String(now.getDate()).padStart(2,'0');
-  var mm=String(now.getMonth()+1).padStart(2,'0');
-  var yyyy=now.getFullYear();
-  var today=dd+'/'+mm+'/'+yyyy;
-  var refNum='QT-PD'+dd+mm+yyyy+'-'+j.id;
-
-  var itemRows=j.quote.items.map(function(item,i){
-    return '<tr style="background:'+(i%2===0?'#fff':'#f9f8f6')+'">'
-      +'<td style="padding:10px 14px;font-size:13px;color:#222;border-bottom:1px solid #eee">'+item.d+'</td>'
-      +'<td style="padding:10px 14px;font-size:13px;color:#222;text-align:right;border-bottom:1px solid #eee;font-family:monospace">$'+fmt(item.a)+'</td>'
-      +'</tr>';
-  }).join('');
-
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    +'<title>Quote '+refNum+'</title>'
-    +'<style>'
-    +'*{box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,sans-serif;font-size:13px;color:#222;padding:40px;max-width:800px;margin:0 auto}'
-    +'@media print{body{padding:0}.no-print{display:none}@page{margin:20mm}}'
-    +'.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:16px}'
-    +'.logo{max-width:160px;max-height:110px}'
-    +'.biz-info{text-align:right;font-size:12px;color:#555;line-height:1.7}'
-    +'.doc-type{font-size:28px;font-weight:700;color:#111;margin-bottom:6px}'
-    +'.divider{border:none;border-top:2px solid #ddd;margin:20px 0}'
-    +'table{width:100%;border-collapse:collapse}'
-    +'thead tr{background:#222}'
-    +'thead th{padding:10px 14px;font-size:12px;font-weight:700;color:#fff;text-align:left}'
-    +'thead th:last-child{text-align:right}'
-    +'.subtotal-row td{padding:9px 14px;font-size:13px;color:#555;background:#f2f1ef;border-bottom:1px solid #eee}'
-    +'.total-row td{padding:11px 14px;font-size:14px;font-weight:700;color:#fff;background:#222}'
-    +'.footer{margin-top:32px;padding-top:16px;border-top:1px solid #ddd;font-size:12px;color:#555;line-height:1.8}'
-    +'.print-btn{display:block;width:100%;margin-top:24px;padding:14px;background:#c8622a;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:Arial,sans-serif}'
-    +'</style></head><body>'
-    +'<div class="header">'
-    +'<img class="logo" src="data:image/png;base64,'+LOGO_B64+'" />'
-    +'<div class="biz-info"><div class="doc-type">QUOTE</div>'
-    +'<div>'+today+'</div><div>'+refNum+'</div>'
-    +'<div>ABN 37 099 822 750</div>'
-    +'<div>p_dinatale@hotmail.com</div>'
-    +'<div>0419 601 472</div>'
-    +'</div></div>'
-    +'<hr class="divider">'
-    +'<p style="font-weight:700;margin-bottom:4px">Att: '+j.client+'</p>'
-    +'<p style="color:#444;margin-bottom:20px">Job location &mdash; '+j.address+'</p>'
-    +'<p style="font-size:15px;font-weight:700;margin-bottom:8px">Description</p>'
-    +'<p style="margin-bottom:16px;color:#333">'+j.type+' &mdash; '+j.name+'</p>'
-    +'<p style="font-size:15px;font-weight:700;margin-bottom:10px">Works Included</p>'
-    +'<table><thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>'
-    +'<tbody>'+itemRows
-    +'<tr class="subtotal-row"><td style="text-align:right;font-weight:600">Sub Total</td><td style="text-align:right;font-family:monospace">$'+fmt(sub)+'</td></tr>'
-    +'<tr class="subtotal-row"><td style="text-align:right">+ 10% GST</td><td style="text-align:right;font-family:monospace">$'+fmt(gst)+'</td></tr>'
-    +'<tr class="total-row"><td style="text-align:right">TOTAL</td><td style="text-align:right;font-family:monospace">$'+fmt(tot)+'</td></tr>'
-    +'</tbody></table>'
-    +'<p style="margin-top:12px;font-size:12px;color:#666;font-style:italic">(Price includes all labour, materials, and site clean-up)</p>'
-    +'<div class="footer">'
-    +'<strong>All payments to Bronte Joinery PTY LTD</strong><br>'
-    +'If you have any queries, please contact Paul on 0419 601 472<br><br>'
-    +'<strong>Payment Details: Paul Di Natale</strong><br>'
-    +'BSB: 062-267 &nbsp; Account Number: 10106397'
-    +'</div>'
-    +'<button class="print-btn no-print" onclick="window.print()">&#128438; Save as PDF / Print</button>'
-    +'</body></html>';
-
-  // Open window synchronously (avoids mobile popup blocker)
-  var win=window.open('','_blank');
-  if(win){
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  } else {
-    // Absolute fallback — navigate current tab on mobile if popup blocked
-    var dataUri='data:text/html;charset=utf-8,'+encodeURIComponent(html);
-    window.location.href=dataUri;
-  }
-
-  var mob=isMobile();
-  var msgsEl=document.getElementById(mob?'mobAiMessages':'aiMessages');
-  msgsEl.innerHTML+='<div class="msg msg-ai">Quote <strong>'+refNum+'</strong> ready. Tap <strong>Save as PDF / Print</strong> on the page that opened.</div>';
-  msgsEl.scrollTop=99999;
-}
-
-// ── Supabase Sync ──
-const SB_URL = 'https://xamkozvouxqnessnvpgp.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
-var isSaving = false;
-
-function sbHeaders(extra){
-  var h = {
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Content-Type': 'application/json'
-  };
-  if(extra) Object.assign(h, extra);
-  return h;
-}
-
-function setSyncStatus(state){
-  var el = document.getElementById('syncStatus');
-  if(!el) return;
-  var map = {saving:'⏳ Saving…', saved:'✓ Saved', error:'⚠ Offline', loading:'⏳ Loading…'};
-  el.textContent = map[state]||'';
-  el.style.color = state==='error'?'#c8622a':state==='saved'?'#2d7a4f':'#9c9690';
-  if(state==='saved') setTimeout(function(){ el.textContent=''; }, 2500);
-}
-
-async function saveJob(job){
-  isSaving = true;
-  setSyncStatus('saving');
-  try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
-  try{
-    var payload = {id: String(job.id), data: job, updated_at: new Date().toISOString()};
-    console.log('Saving job:', job.id, 'to Supabase...');
-    var res = await fetch(SB_URL + '/rest/v1/jobs', {
-      method: 'POST',
-      headers: sbHeaders({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify(payload)
-    });
-    var txt = await res.text();
-    console.log('Save response:', res.status, txt);
-    if(res.status === 200 || res.status === 201 || res.status === 204){
-      setSyncStatus('saved');
-      console.log('Save SUCCESS');
-    } else {
-      throw new Error('HTTP ' + res.status + ': ' + txt);
-    }
-  } catch(e){
-    console.warn('Save FAILED:', e.message);
-    setSyncStatus('error');
-  } finally {
-    isSaving = false;
-  }
-}
-
-async function loadJobsFromCloud(){
-  try{
-    var res = await fetch(SB_URL + '/rest/v1/jobs?select=data&order=updated_at.desc', {
-      method: 'GET',
-      headers: sbHeaders()
-    });
-    if(!res.ok){ throw new Error('HTTP ' + res.status); }
-    var rows = await res.json();
-    if(Array.isArray(rows) && rows.length > 0){
-      jobs.length = 0;
-      rows.forEach(function(row){ jobs.push(row.data); });
-      setSyncStatus('saved');
-      return true;
-    }
-  } catch(e){
-    console.warn('Cloud load failed:', e.message);
-    setSyncStatus('error');
-  }
-  return loadFromLocalStorage();
-}
-
-function loadFromLocalStorage(){
-  try{
-    var raw = localStorage.getItem('procoat_jobs_v1');
-    if(raw){
-      var saved = JSON.parse(raw);
-      if(Array.isArray(saved) && saved.length > 0){
-        jobs.length = 0;
-        saved.forEach(function(j){ jobs.push(j); });
-        return true;
-      }
-    }
-  } catch(e){}
-  return false;
-}
-
-async function deleteJobFromCloud(jobId){
-  try{
-    await fetch(SB_URL + '/rest/v1/jobs?id=eq.' + encodeURIComponent(String(jobId)), {
-      method: 'DELETE',
-      headers: sbHeaders()
-    });
-  } catch(e){ console.warn('Delete failed:', e.message); }
-}
-
-// ── Init — load from cloud then render ──
-loadJobsFromCloud().then(function(loaded){
-  renderJobs();
-  if(jobs.length > 0) selectJob(jobs[0].id);
-});
-
-// Auto-refresh — only when idle for 20 seconds and not saving
-var lastInteraction = Date.now();
-document.addEventListener('click', function(){ lastInteraction = Date.now(); });
-document.addEventListener('keydown', function(){ lastInteraction = Date.now(); });
-document.addEventListener('touchstart', function(){ lastInteraction = Date.now(); });
-
-setInterval(function(){
-  if(isSaving) return;
-  if(Date.now() - lastInteraction < 20000) return;
-
-  var currentJobId = activeJob ? String(activeJob.id) : null;
-  var currentTab = activeTab;
-
-  fetch(SB_URL + '/rest/v1/jobs?select=data&order=updated_at.desc', {
-    method: 'GET',
-    headers: sbHeaders()
-  }).then(function(res){
-    if(!res.ok) return;
-    return res.json();
-  }).then(function(rows){
-    if(!rows || !rows.length) return;
-    // Only update if cloud data is actually different
-    var cloudStr = JSON.stringify(rows.map(function(r){ return r.data; }));
-    var localStr = JSON.stringify(jobs);
-    if(cloudStr === localStr) return;
-    // Update jobs array
-    jobs.length = 0;
-    rows.forEach(function(row){ jobs.push(row.data); });
-    renderJobs();
-    if(currentJobId){
-      var still = jobs.find(function(j){ return String(j.id) === currentJobId; });
-      if(still){
-        activeJob = still;
-        if(currentTab==='overview') renderOverview();
-        else if(currentTab==='photos') renderPhotos();
-        else if(currentTab==='quote') renderQuote();
-        else if(currentTab==='files') renderFiles();
-        else if(currentTab==='notes') renderNotes();
-      }
-    }
-  }).catch(function(){});
-}, 20000);
+renderJobs();
+selectJob(6);
 </script>
 </body>
 </html>
