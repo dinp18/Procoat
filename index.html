@@ -1506,7 +1506,8 @@ function exportQuotePdf(){
 // ── Supabase Sync ──
 const SB_URL  = 'https://xamkozvouxqnessnvpgp.supabase.co';
 const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
-const SB_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'};
+const SB_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
+const SB_UPSERT_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal','x-upsert':'true'};
 
 // Show a small sync status indicator
 function setSyncStatus(state){
@@ -1521,16 +1522,20 @@ function setSyncStatus(state){
 // Save a single job to Supabase (upsert by id)
 async function saveJob(job){
   setSyncStatus('saving');
-  // Also always keep a localStorage backup
+  // Always keep a localStorage backup too
   try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
   try{
-    var res = await fetch(SB_URL+'/rest/v1/jobs', {
+    // Use PUT to upsert — insert if not exists, replace if exists
+    var res = await fetch(SB_URL+'/rest/v1/jobs?on_conflict=id', {
       method:'POST',
-      headers:SB_HDRS,
+      headers:SB_UPSERT_HDRS,
       body:JSON.stringify({id:String(job.id), data:job, updated_at:new Date().toISOString()})
     });
     if(res.ok){ setSyncStatus('saved'); }
-    else { throw new Error('HTTP '+res.status); }
+    else {
+      var errText = await res.text();
+      throw new Error('HTTP '+res.status+' '+errText);
+    }
   } catch(e){
     console.warn('Supabase save failed:', e);
     setSyncStatus('error');
