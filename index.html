@@ -837,7 +837,7 @@ function calcTotal(q){const s=q.items.reduce((a,i)=>a+i.a,0);return Math.round((
 
 function renderJobs(){
   const html=jobs.map(j=>`
-    <div class="job-item ${activeJob&&activeJob.id===j.id?'active':''}" onclick="selectJob(${j.id})">
+    <div class="job-item ${activeJob&&activeJob.id===j.id?'active':''}" onclick="selectJob('${j.id}')">
       <div class="job-name">${j.name}</div>
       <div class="job-meta">${j.type}</div>
       <span class="job-status status-${j.status}">${statusLabel[j.status]}</span>
@@ -850,7 +850,7 @@ function renderJobs(){
 }
 
 function selectJob(id){
-  activeJob=jobs.find(j=>j.id===id);
+  activeJob=jobs.find(j=>String(j.id)===String(id));
   activeTab='overview';
   closeJobDrawer();
   document.getElementById('mainTitle').textContent=activeJob.name;
