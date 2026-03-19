@@ -1532,19 +1532,23 @@ async function saveJob(job){
   setSyncStatus('saving');
   try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
   try{
+    var payload = {id: String(job.id), data: job, updated_at: new Date().toISOString()};
+    console.log('Saving job:', job.id, 'to Supabase...');
     var res = await fetch(SB_URL + '/rest/v1/jobs', {
       method: 'POST',
       headers: sbHeaders({'Prefer': 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify({id: String(job.id), data: job, updated_at: new Date().toISOString()})
+      body: JSON.stringify(payload)
     });
+    var txt = await res.text();
+    console.log('Save response:', res.status, txt);
     if(res.status === 200 || res.status === 201 || res.status === 204){
       setSyncStatus('saved');
+      console.log('Save SUCCESS');
     } else {
-      var txt = await res.text();
       throw new Error('HTTP ' + res.status + ': ' + txt);
     }
   } catch(e){
-    console.warn('Save failed:', e.message);
+    console.warn('Save FAILED:', e.message);
     setSyncStatus('error');
   } finally {
     isSaving = false;
