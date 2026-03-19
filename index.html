@@ -1552,7 +1552,6 @@ async function saveJob(job){
 }
 
 async function loadJobsFromCloud(){
-  setSyncStatus('loading');
   try{
     var res = await fetch(SB_URL + '/rest/v1/jobs?select=data&order=updated_at.desc', {
       method: 'GET',
@@ -1603,25 +1602,37 @@ loadJobsFromCloud().then(function(loaded){
   if(jobs.length > 0) selectJob(jobs[0].id);
 });
 
-// Auto-refresh — only runs when user hasn't interacted recently
+// Auto-refresh — only when idle for 20 seconds and not saving
 var lastInteraction = Date.now();
-var isSaving = false;
 document.addEventListener('click', function(){ lastInteraction = Date.now(); });
 document.addEventListener('keydown', function(){ lastInteraction = Date.now(); });
+document.addEventListener('touchstart', function(){ lastInteraction = Date.now(); });
 
 setInterval(function(){
-  // Don't refresh if user interacted in the last 15 seconds or a save is in progress
   if(isSaving) return;
-  if(Date.now() - lastInteraction < 15000) return;
+  if(Date.now() - lastInteraction < 20000) return;
 
-  var currentJobId = activeJob ? activeJob.id : null;
+  var currentJobId = activeJob ? String(activeJob.id) : null;
   var currentTab = activeTab;
 
-  loadJobsFromCloud().then(function(loaded){
-    if(!loaded) return;
+  fetch(SB_URL + '/rest/v1/jobs?select=data&order=updated_at.desc', {
+    method: 'GET',
+    headers: sbHeaders()
+  }).then(function(res){
+    if(!res.ok) return;
+    return res.json();
+  }).then(function(rows){
+    if(!rows || !rows.length) return;
+    // Only update if cloud data is actually different
+    var cloudStr = JSON.stringify(rows.map(function(r){ return r.data; }));
+    var localStr = JSON.stringify(jobs);
+    if(cloudStr === localStr) return;
+    // Update jobs array
+    jobs.length = 0;
+    rows.forEach(function(row){ jobs.push(row.data); });
     renderJobs();
     if(currentJobId){
-      var still = jobs.find(function(j){ return String(j.id) === String(currentJobId); });
+      var still = jobs.find(function(j){ return String(j.id) === currentJobId; });
       if(still){
         activeJob = still;
         if(currentTab==='overview') renderOverview();
@@ -1631,8 +1642,8 @@ setInterval(function(){
         else if(currentTab==='notes') renderNotes();
       }
     }
-  });
-}, 15000);
+  }).catch(function(){});
+}, 20000);
 </script>
 </body>
 </html>
