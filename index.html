@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <title>Pro Coat Painting — Job Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -1504,10 +1505,18 @@ function exportQuotePdf(){
 }
 
 // ── Supabase Sync ──
-const SB_URL  = 'https://xamkozvouxqnessnvpgp.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
-const SB_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'};
-const SB_UPSERT_HDRS = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal','x-upsert':'true'};
+const SB_URL = 'https://xamkozvouxqnessnvpgp.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhbWtvenZvdXhxbmVzc252cGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODg0MzAsImV4cCI6MjA4OTQ2NDQzMH0.e0tdBZAUHjSAvjsCYawyC2iv-q_aJmaSHj5g7kSxKf0';
+// Use the Supabase JS client loaded from CDN for reliable auth handling
+let sb = null;
+function getSB(){
+  if(sb) return sb;
+  if(typeof supabase !== 'undefined'){
+    sb = supabase.createClient(SB_URL, SB_KEY);
+    return sb;
+  }
+  return null;
+}
 
 // Show a small sync status indicator
 function setSyncStatus(state){
@@ -1522,20 +1531,16 @@ function setSyncStatus(state){
 // Save a single job to Supabase (upsert by id)
 async function saveJob(job){
   setSyncStatus('saving');
-  // Always keep a localStorage backup too
   try{ localStorage.setItem('procoat_jobs_v1', JSON.stringify(jobs)); } catch(e){}
+  var client = getSB();
+  if(!client){ setSyncStatus('error'); return; }
   try{
-    // Use PUT to upsert — insert if not exists, replace if exists
-    var res = await fetch(SB_URL+'/rest/v1/jobs?on_conflict=id', {
-      method:'POST',
-      headers:SB_UPSERT_HDRS,
-      body:JSON.stringify({id:String(job.id), data:job, updated_at:new Date().toISOString()})
-    });
-    if(res.ok){ setSyncStatus('saved'); }
-    else {
-      var errText = await res.text();
-      throw new Error('HTTP '+res.status+' '+errText);
-    }
+    var result = await client.from('jobs').upsert(
+      {id: String(job.id), data: job, updated_at: new Date().toISOString()},
+      {onConflict: 'id'}
+    );
+    if(result.error){ throw result.error; }
+    setSyncStatus('saved');
   } catch(e){
     console.warn('Supabase save failed:', e);
     setSyncStatus('error');
@@ -1545,44 +1550,50 @@ async function saveJob(job){
 // Load all jobs from Supabase
 async function loadJobsFromCloud(){
   setSyncStatus('loading');
+  var client = getSB();
+  if(!client){
+    setSyncStatus('error');
+    return loadFromLocalStorage();
+  }
   try{
-    var res = await fetch(SB_URL+'/rest/v1/jobs?select=data&order=updated_at.desc', {
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-    });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    var rows = await res.json();
-    if(rows && rows.length > 0){
+    var result = await client.from('jobs').select('data').order('updated_at', {ascending:false});
+    if(result.error){ throw result.error; }
+    if(result.data && result.data.length > 0){
       jobs.length = 0;
-      rows.forEach(function(row){ jobs.push(row.data); });
+      result.data.forEach(function(row){ jobs.push(row.data); });
       setSyncStatus('saved');
       return true;
     }
+    // No cloud data yet — load from localStorage as seed
+    return loadFromLocalStorage();
   } catch(e){
     console.warn('Cloud load failed, falling back to localStorage:', e);
     setSyncStatus('error');
-    // Fallback to localStorage
-    try{
-      var raw = localStorage.getItem('procoat_jobs_v1');
-      if(raw){
-        var saved = JSON.parse(raw);
-        if(Array.isArray(saved) && saved.length > 0){
-          jobs.length = 0;
-          saved.forEach(function(j){ jobs.push(j); });
-          return true;
-        }
-      }
-    } catch(e2){}
+    return loadFromLocalStorage();
   }
+}
+
+function loadFromLocalStorage(){
+  try{
+    var raw = localStorage.getItem('procoat_jobs_v1');
+    if(raw){
+      var saved = JSON.parse(raw);
+      if(Array.isArray(saved) && saved.length > 0){
+        jobs.length = 0;
+        saved.forEach(function(j){ jobs.push(j); });
+        return true;
+      }
+    }
+  } catch(e){}
   return false;
 }
 
 // Delete a job from Supabase
 async function deleteJobFromCloud(jobId){
+  var client = getSB();
+  if(!client) return;
   try{
-    await fetch(SB_URL+'/rest/v1/jobs?id=eq.'+encodeURIComponent(String(jobId)), {
-      method:'DELETE',
-      headers:SB_HDRS
-    });
+    await client.from('jobs').delete().eq('id', String(jobId));
   } catch(e){ console.warn('Delete failed:', e); }
 }
 
