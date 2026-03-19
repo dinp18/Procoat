@@ -1598,6 +1598,29 @@ loadJobsFromCloud().then(function(loaded){
   renderJobs();
   if(jobs.length > 0) selectJob(jobs[0].id);
 });
+
+// Auto-refresh every 10 seconds to pick up changes from other devices
+setInterval(function(){
+  var currentJobId = activeJob ? activeJob.id : null;
+  loadJobsFromCloud().then(function(loaded){
+    if(!loaded) return;
+    renderJobs();
+    // Re-select the same job to refresh its content
+    if(currentJobId){
+      var still = jobs.find(function(j){ return j.id == currentJobId; });
+      if(still){
+        // Update activeJob reference without resetting AI chat
+        activeJob = still;
+        // Refresh the current tab silently
+        if(activeTab==='overview') renderOverview();
+        else if(activeTab==='photos') renderPhotos();
+        else if(activeTab==='quote') renderQuote();
+        else if(activeTab==='files') renderFiles();
+        else if(activeTab==='notes') renderNotes();
+      }
+    }
+  });
+}, 10000);
 </script>
 </body>
 </html>
